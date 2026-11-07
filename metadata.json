@@ -1,0 +1,6 @@
+{
+  "name": "Pixel Launcher",
+  "description": "Google Pixel 10 style launcher featuring At a Glance, Material You dynamic theming, Pixel widgets, Discover feed, customizable app drawer and dock.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
