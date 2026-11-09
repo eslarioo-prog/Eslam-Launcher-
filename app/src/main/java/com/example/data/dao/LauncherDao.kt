@@ -98,6 +98,9 @@ interface LauncherDao {
     @Query("DELETE FROM home_widgets WHERE id = :id")
     suspend fun deleteWidgetById(id: Long)
 
+    @Query("DELETE FROM home_widgets WHERE widgetType = :widgetType")
+    suspend fun deleteWidgetsByType(widgetType: String)
+
     // Settings
     @Query("SELECT * FROM launcher_settings")
     fun getAllSettings(): Flow<List<LauncherSettingEntity>>

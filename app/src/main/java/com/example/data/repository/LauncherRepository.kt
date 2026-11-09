@@ -415,22 +415,24 @@ class LauncherRepository(
     }.flowOn(Dispatchers.IO)
 
     val widgetsFlow: Flow<List<WidgetModel>> = launcherDao.getAllWidgets().map { entities ->
-        entities.map { entity ->
+        entities.mapNotNull { entity ->
             val type = try {
                 WidgetType.valueOf(entity.widgetType)
             } catch (e: Exception) {
-                WidgetType.AT_A_GLANCE
+                null
             }
-            WidgetModel(
-                id = entity.id,
-                type = type,
-                pageIndex = entity.pageIndex,
-                cellX = entity.cellX,
-                cellY = entity.cellY,
-                spanX = entity.spanX,
-                spanY = entity.spanY,
-                configData = entity.configData
-            )
+            type?.let {
+                WidgetModel(
+                    id = entity.id,
+                    type = it,
+                    pageIndex = entity.pageIndex,
+                    cellX = entity.cellX,
+                    cellY = entity.cellY,
+                    spanX = entity.spanX,
+                    spanY = entity.spanY,
+                    configData = entity.configData
+                )
+            }
         }
     }.flowOn(Dispatchers.IO)
 
@@ -439,7 +441,7 @@ class LauncherRepository(
         LauncherConfig(
             wallpaperId = map["wallpaper_id"] ?: "obsidian",
             colorPaletteName = map["palette_name"] ?: "Obsidian Slate",
-            useThemedIcons = map["themed_icons"]?.toBooleanStrictOrNull() ?: true,
+            useThemedIcons = map["themed_icons"]?.toBooleanStrictOrNull() ?: false,
             iconShape = map["icon_shape"] ?: "SQUIRCLE",
             dockStyle = map["dock_style"] ?: "PILL_BLUR",
             doubleTapToSleep = map["double_tap_to_sleep"]?.toBooleanStrictOrNull() ?: true,
@@ -456,6 +458,10 @@ class LauncherRepository(
     }.flowOn(Dispatchers.IO)
 
     suspend fun initializeDefaultLayoutIfNeeded() = withContext(Dispatchers.IO) {
+        launcherDao.deleteWidgetsByType("BATTERY_STATUS")
+        launcherDao.deleteWidgetsByType("MUSIC_PLAYER")
+        launcherDao.deleteWidgetsByType("DIGITAL_WELLBEING")
+        launcherDao.deleteWidgetsByType("PIXEL_STUDIO")
         val existingApps = launcherDao.getAllAppItems().first()
         if (existingApps.isEmpty()) {
             // Populate defaults
@@ -477,7 +483,7 @@ class LauncherRepository(
             }
             launcherDao.insertAppItems(entities)
 
-            // Insert default widgets (At a Glance and Battery Widget on Page 1)
+            // Insert default widgets (At a Glance on Page 0)
             val defaultWidgets = listOf(
                 WidgetEntity(
                     widgetType = WidgetType.AT_A_GLANCE.name,
@@ -486,22 +492,15 @@ class LauncherRepository(
                     cellY = 0,
                     spanX = 4,
                     spanY = 1
-                ),
-                WidgetEntity(
-                    widgetType = WidgetType.BATTERY_STATUS.name,
-                    pageIndex = 1,
-                    cellX = 0,
-                    cellY = 2,
-                    spanX = 4,
-                    spanY = 2
                 )
             )
             launcherDao.insertWidgets(defaultWidgets)
+            launcherDao.deleteWidgetsByType("BATTERY_STATUS")
 
             // Insert default settings
             launcherDao.setSetting(LauncherSettingEntity("wallpaper_id", "obsidian"))
             launcherDao.setSetting(LauncherSettingEntity("palette_name", "Obsidian Slate"))
-            launcherDao.setSetting(LauncherSettingEntity("themed_icons", "true"))
+            launcherDao.setSetting(LauncherSettingEntity("themed_icons", "false"))
             launcherDao.setSetting(LauncherSettingEntity("icon_shape", "SQUIRCLE"))
             launcherDao.setSetting(LauncherSettingEntity("grid_rows", "5"))
             launcherDao.setSetting(LauncherSettingEntity("grid_cols", "4"))
@@ -514,13 +513,20 @@ class LauncherRepository(
             launcherDao.setSetting(LauncherSettingEntity("aag_calendar", "true"))
             launcherDao.setSetting(LauncherSettingEntity("aag_battery", "true"))
             launcherDao.setSetting(LauncherSettingEntity("dark_mode", "SYSTEM"))
+        } else {
+            // Ensure themed_icons is set to false for classic Pixel theme
+            launcherDao.setSetting(LauncherSettingEntity("themed_icons", "false"))
         }
     }
 
-    private fun mergeAppsWithDatabase(dbItems: List<AppItemEntity>): List<AppModel> {
-        val dbMap = dbItems.associateBy { it.packageName }
+    private var cachedInstalledApps: List<android.content.pm.ResolveInfo>? = null
+    private val appLabelCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private fun getInstalledAppsList(): List<android.content.pm.ResolveInfo> {
+        val cached = cachedInstalledApps
+        if (cached != null) return cached
         val packageManager = context.packageManager
-        val installedAppsList = try {
+        val list = try {
             val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
@@ -528,6 +534,14 @@ class LauncherRepository(
         } catch (e: Exception) {
             emptyList()
         }
+        cachedInstalledApps = list
+        return list
+    }
+
+    private fun mergeAppsWithDatabase(dbItems: List<AppItemEntity>): List<AppModel> {
+        val dbMap = dbItems.associateBy { it.packageName }
+        val packageManager = context.packageManager
+        val installedAppsList = getInstalledAppsList()
 
         val result = mutableListOf<AppModel>()
         val processedPackages = mutableSetOf<String>()
@@ -557,10 +571,12 @@ class LauncherRepository(
             val pkg = resolveInfo.activityInfo.packageName
             if (pkg != context.packageName && !processedPackages.contains(pkg)) {
                 processedPackages.add(pkg)
-                val label = try {
-                    resolveInfo.loadLabel(packageManager).toString()
-                } catch (e: Exception) {
-                    pkg
+                val label = appLabelCache.getOrPut(pkg) {
+                    try {
+                        resolveInfo.loadLabel(packageManager).toString()
+                    } catch (e: Exception) {
+                        pkg
+                    }
                 }
                 val dbItem = dbMap[pkg]
                 val systemKey = guessSystemIconKey(pkg, label)

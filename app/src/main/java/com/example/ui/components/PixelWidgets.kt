@@ -1,11 +1,9 @@
 package com.example.ui.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import android.app.AlarmManager
+import android.content.Context
+import android.content.Intent
+import android.provider.AlarmClock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,30 +22,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Air
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.BatteryChargingFull
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Smartphone
-import androidx.compose.material.icons.filled.Watch
-import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,10 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -83,6 +65,20 @@ fun PixelWidgetContainer(
     onOpenWeather: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val onDateClick = remember(context) {
+        {
+            val calendarIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_APP_CALENDAR)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            try {
+                context.startActivity(calendarIntent)
+            } catch (e: Exception) {
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -92,7 +88,7 @@ fun PixelWidgetContainer(
             WidgetType.AT_A_GLANCE -> {
                 AtAGlanceWidget(
                     weatherData = weatherData,
-                    onDateClick = {},
+                    onDateClick = onDateClick,
                     onWeatherClick = onOpenWeather
                 )
             }
@@ -107,18 +103,6 @@ fun PixelWidgetContainer(
             }
             WidgetType.CLOCK_DIGITAL -> {
                 PixelDigitalClockWidget()
-            }
-            WidgetType.BATTERY_STATUS -> {
-                PixelBatteryHubWidget()
-            }
-            WidgetType.MUSIC_PLAYER -> {
-                PixelNowPlayingWidget()
-            }
-            WidgetType.DIGITAL_WELLBEING -> {
-                PixelDigitalWellbeingWidget()
-            }
-            WidgetType.PIXEL_STUDIO -> {
-                PixelStudioWidget(onClick = onOpenWeather)
             }
         }
     }
@@ -221,13 +205,36 @@ fun PixelWeatherCardWidget(
 }
 
 @Composable
-fun PixelAnalogClockWidget(modifier: Modifier = Modifier) {
+fun PixelAnalogClockWidget(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
     var calendar by remember { mutableStateOf(Calendar.getInstance()) }
 
     LaunchedEffect(Unit) {
         while (true) {
             calendar = Calendar.getInstance()
             delay(1000)
+        }
+    }
+
+    val onClockClick = remember(context, onClick) {
+        onClick ?: {
+            val clockIntent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            try {
+                context.startActivity(clockIntent)
+            } catch (e: Exception) {
+                try {
+                    val fallbackIntent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(fallbackIntent)
+                } catch (e2: Exception) {
+                }
+            }
         }
     }
 
@@ -242,6 +249,7 @@ fun PixelAnalogClockWidget(modifier: Modifier = Modifier) {
             .shadow(elevation = 6.dp, shape = CircleShape)
             .clip(CircleShape)
             .background(surfaceColor)
+            .clickable(onClick = onClockClick)
             .border(2.dp, primaryColor.copy(alpha = 0.4f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
@@ -322,25 +330,67 @@ fun PixelAnalogClockWidget(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun PixelDigitalClockWidget(modifier: Modifier = Modifier) {
+fun PixelDigitalClockWidget(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
     var timeStr by remember { mutableStateOf(timeFormat.format(Date())) }
     var dateStr by remember { mutableStateOf(dateFormat.format(Date())) }
+    var alarmOrDayStr by remember { mutableStateOf("") }
+
+    val updateTimeAndAlarm: () -> Unit = {
+        val now = Date()
+        timeStr = timeFormat.format(now)
+        dateStr = dateFormat.format(now)
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        val nextAlarm = try {
+            alarmManager?.nextAlarmClock
+        } catch (e: Exception) {
+            null
+        }
+        alarmOrDayStr = if (nextAlarm != null) {
+            val alarmDate = Date(nextAlarm.triggerTime)
+            val alarmTimeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+            "Alarm: ${alarmTimeFormat.format(alarmDate)}"
+        } else {
+            SimpleDateFormat("EEEE", Locale.getDefault()).format(now)
+        }
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
-            val now = Date()
-            timeStr = timeFormat.format(now)
-            dateStr = dateFormat.format(now)
+            updateTimeAndAlarm()
             delay(1000)
+        }
+    }
+
+    val onClockClick = remember(context, onClick) {
+        onClick ?: {
+            val clockIntent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            try {
+                context.startActivity(clockIntent)
+            } catch (e: Exception) {
+                try {
+                    val fallbackIntent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(fallbackIntent)
+                } catch (e2: Exception) {
+                }
+            }
         }
     }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(26.dp)),
+            .clip(RoundedCornerShape(26.dp))
+            .clickable(onClick = onClockClick),
         shape = RoundedCornerShape(26.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)
@@ -375,355 +425,12 @@ fun PixelDigitalClockWidget(modifier: Modifier = Modifier) {
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Text(
-                    text = "Alarm: 07:00 AM",
+                    text = alarmOrDayStr,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun PixelBatteryHubWidget(modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(26.dp)),
-        shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(
-                text = "Battery Hub",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Pixel 10 Phone
-                BatteryDeviceItem(
-                    icon = Icons.Default.Smartphone,
-                    name = "Pixel 10",
-                    percent = 84,
-                    isCharging = true
-                )
-
-                // Pixel Watch 3
-                BatteryDeviceItem(
-                    icon = Icons.Default.Watch,
-                    name = "Pixel Watch",
-                    percent = 92,
-                    isCharging = false
-                )
-
-                // Pixel Buds Pro 2
-                BatteryDeviceItem(
-                    icon = Icons.Default.Headphones,
-                    name = "Pixel Buds",
-                    percent = 100,
-                    isCharging = false
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun BatteryDeviceItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    name: String,
-    percent: Int,
-    isCharging: Boolean
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(horizontal = 4.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = name,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "$percent%",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = name,
-            fontSize = 10.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-        )
-    }
-}
-
-@Composable
-fun PixelNowPlayingWidget(modifier: Modifier = Modifier) {
-    var isPlaying by remember { mutableStateOf(true) }
-    val infiniteTransition = rememberInfiniteTransition(label = "music")
-    val wave1 by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "wave1"
-    )
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(26.dp)),
-        shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Album art & details
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.tertiary
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Album",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column {
-                    Text(
-                        text = "Starboy (Pixel Audio)",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                    Text(
-                        text = "The Weeknd • YouTube Music",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        maxLines = 1
-                    )
-                }
-            }
-
-            // Controls
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = {}) {
-                    Icon(
-                        imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Prev",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                        .clickable { isPlaying = !isPlaying },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = "Play/Pause",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                IconButton(onClick = {}) {
-                    Icon(
-                        imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Next",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PixelDigitalWellbeingWidget(modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(26.dp)),
-        shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Digital Wellbeing",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "3h 12m today",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            LinearProgressIndicator(
-                progress = { 0.65f },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(CircleShape),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "42 unlocks • 128 alerts",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
-                Text(
-                    text = "Top: Chrome, YouTube",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun PixelStudioWidget(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = "Pixel Studio",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Pixel Studio AI",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primary)
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Generate",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = "Create custom AI wallpapers, stickers & generative sticker packs instantly with Tensor G5.",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-            )
         }
     }
 }

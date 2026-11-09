@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -18,27 +19,25 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.BrightnessMedium
-import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.filled.FlashlightOn
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.ScreenRotation
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SignalCellularAlt
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.SignalCellular4Bar
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -62,225 +61,342 @@ fun QuickSettingsShade(
     onDismiss: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-    val timeStr = remember { timeFormat.format(Date()) }
+    val timeFormat = remember { SimpleDateFormat("h:mm", Locale.getDefault()) }
     val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
-    val dateStr = remember { dateFormat.format(Date()) }
-
-    var brightness by remember { mutableFloatStateOf(0.75f) }
+    val now = Date()
+    val timeStr = remember { timeFormat.format(now) }
+    val dateStr = remember { dateFormat.format(now) }
 
     val toggleStates = remember {
         mutableStateMapOf(
             "Internet" to true,
-            "Bluetooth" to true,
+            "Bluetooth" to false,
             "Flashlight" to false,
-            "Do Not Disturb" to false,
-            "Dark Theme" to true,
-            "Auto-rotate" to true
+            "Do Not Disturb" to false
         )
     }
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xF0101418))
+                .background(Color(0xFF0C0E10))
                 .statusBarsPadding()
-                .padding(16.dp)
+                .navigationBarsPadding()
+                .clickable(onClick = onDismiss)
                 .testTag("quick_settings_shade")
         ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(enabled = false) {}
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                // Top Bar with Clock and Action icons
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = timeStr,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Text(
-                                text = dateStr,
-                                fontSize = 12.sp,
-                                color = Color.White.copy(alpha = 0.7f)
-                            )
-                        }
+                // Top Status Bar: Clock on Left, Indicators on Right
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "$timeStr  $dateStr",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White
+                    )
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IconButton(
-                                onClick = {
-                                    onDismiss()
-                                    onOpenSettings()
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "Settings",
-                                    tint = Color.White
-                                )
-                            }
-                            IconButton(onClick = onDismiss) {
-                                Icon(
-                                    imageVector = Icons.Default.PowerSettingsNew,
-                                    contentDescription = "Power",
-                                    tint = Color.White
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Brightness Slider
-                item {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Color(0xFF242A30))
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.BrightnessMedium,
-                            contentDescription = "Brightness",
+                            imageVector = Icons.Default.SignalCellular4Bar,
+                            contentDescription = "Signal",
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(15.dp)
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Slider(
-                            value = brightness,
-                            onValueChange = { brightness = it },
-                            modifier = Modifier.weight(1f),
-                            colors = SliderDefaults.colors(
-                                thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = Color.Gray.copy(alpha = 0.3f)
-                            )
+                        Icon(
+                            imageVector = Icons.Default.Wifi,
+                            contentDescription = "Wi-Fi",
+                            tint = Color.White,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Icon(
+                            imageVector = Icons.Default.BatteryFull,
+                            contentDescription = "Battery",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "100%",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
                         )
                     }
                 }
 
-                // 2x3 Quick Setting Tile Pills
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            QuickSettingTile(
-                                title = "Internet",
-                                subtitle = "Pixel_5G_Fast",
-                                icon = Icons.Default.Wifi,
-                                isActive = toggleStates["Internet"] ?: true,
-                                onClick = { toggleStates["Internet"] = !(toggleStates["Internet"] ?: true) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            QuickSettingTile(
-                                title = "Bluetooth",
-                                subtitle = "Buds Pro 2",
-                                icon = Icons.Default.Bluetooth,
-                                isActive = toggleStates["Bluetooth"] ?: true,
-                                onClick = { toggleStates["Bluetooth"] = !(toggleStates["Bluetooth"] ?: true) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                Spacer(modifier = Modifier.height(14.dp))
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            QuickSettingTile(
-                                title = "Flashlight",
-                                subtitle = if (toggleStates["Flashlight"] == true) "On" else "Off",
-                                icon = Icons.Default.FlashlightOn,
-                                isActive = toggleStates["Flashlight"] ?: false,
-                                onClick = { toggleStates["Flashlight"] = !(toggleStates["Flashlight"] ?: false) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            QuickSettingTile(
-                                title = "Do Not Disturb",
-                                subtitle = if (toggleStates["Do Not Disturb"] == true) "On" else "Off",
-                                icon = Icons.Default.DoNotDisturb,
-                                isActive = toggleStates["Do Not Disturb"] ?: false,
-                                onClick = { toggleStates["Do Not Disturb"] = !(toggleStates["Do Not Disturb"] ?: false) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                // Quick Settings 2x2 Grid Tiles
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        PixelQuickTile(
+                            title = "Internet",
+                            icon = Icons.Default.Wifi,
+                            hasChevron = true,
+                            isActive = toggleStates["Internet"] ?: true,
+                            onClick = { toggleStates["Internet"] = !(toggleStates["Internet"] ?: true) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        PixelQuickTile(
+                            title = "Bluetooth",
+                            icon = Icons.Default.Bluetooth,
+                            hasChevron = true,
+                            isActive = toggleStates["Bluetooth"] ?: false,
+                            onClick = { toggleStates["Bluetooth"] = !(toggleStates["Bluetooth"] ?: false) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
 
-                        Row(
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        PixelQuickTile(
+                            title = "Flashlight",
+                            icon = Icons.Default.FlashlightOn,
+                            hasChevron = false,
+                            isActive = toggleStates["Flashlight"] ?: false,
+                            onClick = { toggleStates["Flashlight"] = !(toggleStates["Flashlight"] ?: false) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        PixelQuickTile(
+                            title = "Do Not Disturb",
+                            icon = Icons.Default.DoNotDisturb,
+                            hasChevron = false,
+                            isActive = toggleStates["Do Not Disturb"] ?: false,
+                            onClick = { toggleStates["Do Not Disturb"] = !(toggleStates["Do Not Disturb"] ?: false) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Notifications Section
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Security & Privacy Notification Card
+                    item {
+                        Card(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2023))
                         ) {
-                            QuickSettingTile(
-                                title = "Dark Theme",
-                                subtitle = "Scheduled",
-                                icon = Icons.Default.DarkMode,
-                                isActive = toggleStates["Dark Theme"] ?: true,
-                                onClick = { toggleStates["Dark Theme"] = !(toggleStates["Dark Theme"] ?: true) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            QuickSettingTile(
-                                title = "Auto-rotate",
-                                subtitle = "On",
-                                icon = Icons.Default.ScreenRotation,
-                                isActive = toggleStates["Auto-rotate"] ?: true,
-                                onClick = { toggleStates["Auto-rotate"] = !(toggleStates["Auto-rotate"] ?: true) },
-                                modifier = Modifier.weight(1f)
-                            )
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF2D3035)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Security,
+                                                contentDescription = null,
+                                                tint = Color(0xFF7CACEA),
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Security & privacy • now",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF9AA0A6)
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowUp,
+                                        contentDescription = "Collapse",
+                                        tint = Color(0xFF9AA0A6),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Text(
+                                    text = "Set a screen lock",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "For added security, set a PIN, pattern, or password for this device.",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFFC4C7C5),
+                                    lineHeight = 17.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // Silent Section Label
+                    item {
+                        Text(
+                            text = "Silent",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF9AA0A6),
+                            modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 2.dp)
+                        )
+                    }
+
+                    // Silent Android System Notification Card
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2023))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF2D3035)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Keyboard,
+                                                contentDescription = null,
+                                                tint = Color(0xFF7CACEA),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Android System",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF9AA0A6)
+                                        )
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "2",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF9AA0A6)
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.KeyboardArrowDown,
+                                            contentDescription = "Expand",
+                                            tint = Color(0xFF9AA0A6),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Text(
+                                    text = "qwerty2 configured Keyboard layout set to Engli...",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFFE2E2E2),
+                                    maxLines = 1
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Serial console enabled Performance is impacte...",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF9AA0A6),
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                 }
 
-                // Notification Section Header
-                item {
-                    Text(
-                        text = "Notifications",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Notification Card 1: Google Calendar
-                item {
-                    NotificationItemCard(
-                        appName = "Calendar",
-                        title = "Upcoming: Team Sync in 15m",
-                        desc = "Google Meet link ready • 4 attendees",
-                        timeAgo = "15m"
-                    )
-                }
+                // Bottom Actions: Manage & Clear All Buttons
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(100))
+                            .background(Color(0xFF2D3035))
+                            .clickable {
+                                onDismiss()
+                                onOpenSettings()
+                            }
+                            .padding(horizontal = 24.dp, vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Manage",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
+                        )
+                    }
 
-                // Notification Card 2: Messages
-                item {
-                    NotificationItemCard(
-                        appName = "Messages",
-                        title = "Alex Rivera",
-                        desc = "Hey, are you trying out the new Pixel 10 launcher? Looks clean!",
-                        timeAgo = "32m"
-                    )
-                }
-
-                // Notification Card 3: Pixel Tips
-                item {
-                    NotificationItemCard(
-                        appName = "Pixel Tips",
-                        title = "Magic Compose is ready",
-                        desc = "Use Gemini on-device to rewrite drafts in your favorite style.",
-                        timeAgo = "1h"
-                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(100))
+                            .background(Color(0xFF2D3035))
+                            .clickable { onDismiss() }
+                            .padding(horizontal = 24.dp, vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Clear all",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
+                        )
+                    }
                 }
             }
         }
@@ -288,98 +404,53 @@ fun QuickSettingsShade(
 }
 
 @Composable
-fun QuickSettingTile(
+fun PixelQuickTile(
     title: String,
-    subtitle: String,
     icon: ImageVector,
+    hasChevron: Boolean,
     isActive: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val activeBg = MaterialTheme.colorScheme.primary
-    val inactiveBg = Color(0xFF242A30)
-    val activeContent = MaterialTheme.colorScheme.onPrimary
-    val inactiveContent = Color.White
+    val containerColor = if (isActive) Color(0xFFD3E3FD) else Color(0xFF1E2023)
+    val contentColor = if (isActive) Color(0xFF041E49) else Color.White
 
     Row(
         modifier = modifier
-            .height(64.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (isActive) activeBg else inactiveBg)
+            .height(68.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(containerColor)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = title,
-            tint = if (isActive) activeContent else inactiveContent,
-            modifier = Modifier.size(22.dp)
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Column {
-            Text(
-                text = title,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isActive) activeContent else inactiveContent,
-                maxLines = 1
-            )
-            Text(
-                text = subtitle,
-                fontSize = 11.sp,
-                color = if (isActive) activeContent.copy(alpha = 0.8f) else inactiveContent.copy(alpha = 0.6f),
-                maxLines = 1
-            )
-        }
-    }
-}
-
-@Composable
-fun NotificationItemCard(
-    appName: String,
-    title: String,
-    desc: String,
-    timeAgo: String
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF20262C))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = appName,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = timeAgo,
-                    fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.5f)
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = contentColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = title,
                 fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
+                fontWeight = FontWeight.Medium,
+                color = contentColor,
+                maxLines = 1
             )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = desc,
-                fontSize = 12.sp,
-                color = Color.White.copy(alpha = 0.75f)
+        }
+
+        if (hasChevron) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "Expand",
+                tint = contentColor.copy(alpha = 0.7f),
+                modifier = Modifier.size(18.dp)
             )
         }
     }

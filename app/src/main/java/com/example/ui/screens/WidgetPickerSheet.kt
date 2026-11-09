@@ -20,11 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.Card
@@ -51,10 +47,6 @@ fun getWidgetIcon(type: WidgetType): ImageVector {
         WidgetType.WEATHER_PILL -> Icons.Default.Cloud
         WidgetType.CLOCK_ANALOG -> Icons.Default.Schedule
         WidgetType.CLOCK_DIGITAL -> Icons.Default.Schedule
-        WidgetType.BATTERY_STATUS -> Icons.Default.BatteryChargingFull
-        WidgetType.MUSIC_PLAYER -> Icons.Default.GraphicEq
-        WidgetType.DIGITAL_WELLBEING -> Icons.Default.PieChart
-        WidgetType.PIXEL_STUDIO -> Icons.Default.AutoAwesome
     }
 }
 

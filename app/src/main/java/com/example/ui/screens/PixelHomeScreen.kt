@@ -143,39 +143,49 @@ fun PixelHomeScreen(
     val pagerState = rememberPagerState(initialPage = 1, pageCount = { 3 })
 
     // Wallpaper Resource
-    val wallpaperRes = when (config.wallpaperId) {
-        "meadow" -> R.drawable.pixel_wallpaper_meadow_1791269899199
-        "sunset" -> R.drawable.pixel_wallpaper_sunset_1791269910743
-        else -> R.drawable.pixel_wallpaper_obsidian_1791269886355
+    val wallpaperRes = remember(config.wallpaperId) {
+        when (config.wallpaperId) {
+            "meadow" -> R.drawable.pixel_wallpaper_meadow_1791269899199
+            "sunset" -> R.drawable.pixel_wallpaper_sunset_1791269910743
+            else -> R.drawable.pixel_wallpaper_obsidian_1791269886355
+        }
     }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .testTag("pixel_home_screen")
-            .pointerInput(Unit) {
-                detectVerticalDragGestures { _, dragAmount ->
-                    if (dragAmount < -30 && !isDrawerOpen) {
-                        viewModel.openDrawer()
-                    } else if (dragAmount > 35 && !isDrawerOpen && pagerState.currentPage != 0) {
-                        if (config.swipeDownGesture == "NOTIFICATIONS") {
-                            viewModel.openSheet(LauncherSheet.QuickSettingsShade)
-                        } else if (config.swipeDownGesture == "APP_DRAWER") {
-                            viewModel.openDrawer()
+            .then(
+                if (!isDrawerOpen) {
+                    Modifier.pointerInput(Unit) {
+                        detectVerticalDragGestures { _, dragAmount ->
+                            if (dragAmount < -36) {
+                                viewModel.openDrawer()
+                            } else if (dragAmount > 40 && pagerState.currentPage != 0) {
+                                if (config.swipeDownGesture == "NOTIFICATIONS") {
+                                    viewModel.openSheet(LauncherSheet.QuickSettingsShade)
+                                } else if (config.swipeDownGesture == "APP_DRAWER") {
+                                    viewModel.openDrawer()
+                                }
+                            }
                         }
                     }
-                }
-            }
+                } else Modifier
+            )
     ) {
-        // Wallpaper Layer with subtle dynamic blur when Drawer is open
-        Image(
-            painter = painterResource(id = wallpaperRes),
-            contentDescription = "Pixel Wallpaper",
-            modifier = Modifier
-                .fillMaxSize()
-                .blur(if (isDrawerOpen) 18.dp else 0.dp),
-            contentScale = ContentScale.Crop
+        // Original Pixel Live Wallpaper Layer
+        com.example.ui.components.PixelLiveWallpaperCanvas(
+            modifier = Modifier.fillMaxSize()
         )
+
+        // Smooth scrim when App Drawer is opened
+        if (isDrawerOpen) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
+            )
+        }
 
         // Subtle gradient overlay for contrast
         Box(
@@ -234,18 +244,28 @@ fun PixelHomeScreen(
                                 showWeather = config.showAtAGlanceWeather,
                                 showCalendar = config.showAtAGlanceCalendar,
                                 showBattery = config.showAtAGlanceBattery,
-                                onDateClick = {},
+                                onDateClick = {
+                                    val calendarIntent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+                                        addCategory(android.content.Intent.CATEGORY_APP_CALENDAR)
+                                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    try {
+                                        context.startActivity(calendarIntent)
+                                    } catch (e: Exception) {
+                                    }
+                                },
                                 onWeatherClick = { viewModel.openSheet(LauncherSheet.WeatherForecast) }
                             )
 
                             Spacer(modifier = Modifier.height(16.dp))
 
                             // Main Desktop Grid (4x5)
-                            val page0Apps = desktopApps.filter { it.pageIndex == 0 }
-                            val page0Folders = folders.filter { it.pageIndex == 0 }
+                            val page0Apps = remember(desktopApps) { desktopApps.filter { it.pageIndex == 0 } }
+                            val page0Folders = remember(folders) { folders.filter { it.pageIndex == 0 } }
 
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(config.gridCols),
+                                userScrollEnabled = false,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f),
@@ -253,7 +273,11 @@ fun PixelHomeScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 // Folders
-                                items(page0Folders) { folder ->
+                                items(
+                                    items = page0Folders,
+                                    key = { it.id },
+                                    contentType = { "folder" }
+                                ) { folder ->
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier
@@ -312,7 +336,11 @@ fun PixelHomeScreen(
                                 }
 
                                 // Desktop Apps
-                                items(page0Apps, key = { it.packageName }) { app ->
+                                items(
+                                    items = page0Apps,
+                                    key = { it.packageName },
+                                    contentType = { "desktop_app" }
+                                ) { app ->
                                     var itemPos by remember { mutableStateOf(Offset.Zero) }
                                     Box(
                                         modifier = Modifier
@@ -387,8 +415,8 @@ fun PixelHomeScreen(
                                 modifier = Modifier.padding(start = 6.dp, top = 8.dp, bottom = 12.dp)
                             )
 
-                            val page1Widgets = widgets.filter { it.pageIndex == 1 }
-                            val page1Apps = desktopApps.filter { it.pageIndex == 1 }
+                            val page1Widgets = remember(widgets) { widgets.filter { it.pageIndex == 1 } }
+                            val page1Apps = remember(desktopApps) { desktopApps.filter { it.pageIndex == 1 } }
 
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(1),
@@ -397,7 +425,11 @@ fun PixelHomeScreen(
                                     .weight(1f),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                items(page1Widgets) { widget ->
+                                items(
+                                    items = page1Widgets,
+                                    key = { it.id },
+                                    contentType = { "widget_${it.type.name}" }
+                                ) { widget ->
                                     PixelWidgetContainer(
                                         widget = widget,
                                         weatherData = weatherData,
@@ -406,7 +438,11 @@ fun PixelHomeScreen(
                                     )
                                 }
 
-                                items(page1Apps, key = { it.packageName }) { app ->
+                                items(
+                                    items = page1Apps,
+                                    key = { it.packageName },
+                                    contentType = { "desktop_app" }
+                                ) { app ->
                                     var itemPos by remember { mutableStateOf(Offset.Zero) }
                                     Box(
                                         modifier = Modifier

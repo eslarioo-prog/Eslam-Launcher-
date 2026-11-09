@@ -1,5 +1,7 @@
 package com.example.model
 
+import androidx.compose.runtime.Immutable
+
 enum class AppCategory(val title: String) {
     ALL("All Apps"),
     SUGGESTED("Suggested"),
@@ -13,6 +15,7 @@ enum class AppCategory(val title: String) {
     SYSTEM("System")
 }
 
+@Immutable
 data class AppShortcut(
     val id: String,
     val label: String,
@@ -20,6 +23,7 @@ data class AppShortcut(
     val actionType: String = "launch"
 )
 
+@Immutable
 data class AppModel(
     val packageName: String,
     val activityName: String = "",
@@ -43,13 +47,10 @@ enum class WidgetType(val displayName: String, val description: String, val defa
     AT_A_GLANCE("At a Glance", "Pixel live weather, calendar events and alerts", 4, 1),
     WEATHER_PILL("Pixel Weather", "Live conditions and 5-day forecast card", 4, 2),
     CLOCK_ANALOG("Analog Clock", "Material You dynamic shape analog clock", 2, 2),
-    CLOCK_DIGITAL("Digital Clock", "Modern Pixel numeral typography clock", 2, 2),
-    BATTERY_STATUS("Battery Hub", "Pixel Phone, Watch & Buds charge levels", 4, 2),
-    MUSIC_PLAYER("Now Playing", "Media playback with dynamic visualizer", 4, 2),
-    DIGITAL_WELLBEING("Digital Wellbeing", "Daily screen time & app activity ring", 2, 2),
-    PIXEL_STUDIO("Pixel Studio", "AI Sticker & Wallpaper generator canvas", 4, 2)
+    CLOCK_DIGITAL("Digital Clock", "Modern Pixel numeral typography clock", 2, 2)
 }
 
+@Immutable
 data class WidgetModel(
     val id: Long = 0,
     val type: WidgetType,
@@ -61,6 +62,7 @@ data class WidgetModel(
     val configData: String = ""
 )
 
+@Immutable
 data class FolderModel(
     val id: Long = 0,
     val title: String,
@@ -72,6 +74,7 @@ data class FolderModel(
     val colorTag: String = "primary"
 )
 
+@Immutable
 data class DiscoverNewsItem(
     val id: String,
     val title: String,
@@ -85,12 +88,14 @@ data class DiscoverNewsItem(
     val drawableRes: Int? = null
 )
 
+@Immutable
 data class HourlyForecast(
     val time: String,
     val temp: Int,
     val iconKey: String
 )
 
+@Immutable
 data class DailyForecast(
     val day: String,
     val condition: String,
@@ -99,6 +104,7 @@ data class DailyForecast(
     val iconKey: String
 )
 
+@Immutable
 data class PixelWeatherData(
     val temperature: Int = 21,
     val condition: String = "Mostly Sunny",
@@ -137,10 +143,11 @@ enum class PixelIconShape(val id: String, val displayName: String) {
     TEARDROP("TEARDROP", "Teardrop")
 }
 
+@Immutable
 data class LauncherConfig(
     val wallpaperId: String = "obsidian", // obsidian, meadow, sunset, dynamic_aurora
     val colorPaletteName: String = "Obsidian Slate", // Obsidian Slate, Bay Cyan, Meadow Mint, Coral Rose, Lilac Lavender
-    val useThemedIcons: Boolean = true,
+    val useThemedIcons: Boolean = false,
     val iconShape: String = "SQUIRCLE", // SQUIRCLE, ROUNDED_SQUARE, CIRCLE, TEARDROP
     val dockStyle: String = "PILL_BLUR", // TRANSPARENT, PILL_BLUR, SOLID_CARD
     val doubleTapToSleep: Boolean = true,

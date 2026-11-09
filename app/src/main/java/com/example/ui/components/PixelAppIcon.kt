@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -66,7 +67,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.Bitmap
+import androidx.collection.LruCache
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.core.graphics.drawable.toBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.example.model.AppModel
 import com.example.ui.theme.GoogleBlue
 import com.example.ui.theme.GoogleGreen
@@ -76,15 +83,22 @@ import com.example.ui.theme.GoogleYellow
 /**
  * Pixel Superellipse Squircle Shape.
  * Provides continuous curvature geometry conforming to Google Pixel adaptive icon guidelines.
+ * Caches outline per size to avoid CPU path recalculations.
  */
 class PixelSquircleShape(
     private val smoothness: Float = 0.68f
 ) : Shape {
+    private var lastSize: Size? = null
+    private var cachedOutline: Outline? = null
+
     override fun createOutline(
         size: Size,
         layoutDirection: LayoutDirection,
         density: Density
     ): Outline {
+        if (size == lastSize && cachedOutline != null) {
+            return cachedOutline!!
+        }
         val w = size.width
         val h = size.height
         val minDim = minOf(w, h)
@@ -103,19 +117,29 @@ class PixelSquircleShape(
             cubicTo(0f, r - c, r - c, 0f, r, 0f)
             close()
         }
-        return Outline.Generic(path)
+        val outline = Outline.Generic(path)
+        lastSize = size
+        cachedOutline = outline
+        return outline
     }
 }
 
 /**
  * Pixel Teardrop Shape for dynamic icon customization.
+ * Caches outline per size.
  */
 class PixelTeardropShape : Shape {
+    private var lastSize: Size? = null
+    private var cachedOutline: Outline? = null
+
     override fun createOutline(
         size: Size,
         layoutDirection: LayoutDirection,
         density: Density
     ): Outline {
+        if (size == lastSize && cachedOutline != null) {
+            return cachedOutline!!
+        }
         val w = size.width
         val h = size.height
         val r = minOf(w, h) * 0.5f
@@ -131,9 +155,17 @@ class PixelTeardropShape : Shape {
             cubicTo(0f, 0f, r, 0f, r, 0f)
             close()
         }
-        return Outline.Generic(path)
+        val outline = Outline.Generic(path)
+        lastSize = size
+        cachedOutline = outline
+        return outline
     }
 }
+
+// Reusable shape instances to avoid allocating new instances on every recomposition
+private val squircleShapeInstance = PixelSquircleShape()
+private val teardropShapeInstance = PixelTeardropShape()
+private val roundedSquareShapeInstance = RoundedCornerShape(percent = 22)
 
 /**
  * Resolves the dynamic icon mask shape based on user preference.
@@ -141,11 +173,11 @@ class PixelTeardropShape : Shape {
  */
 fun getPixelMaskShape(shapeId: String): Shape {
     return when (shapeId) {
-        "SQUIRCLE" -> PixelSquircleShape()
-        "ROUNDED_SQUARE" -> RoundedCornerShape(percent = 22)
+        "SQUIRCLE" -> squircleShapeInstance
+        "ROUNDED_SQUARE" -> roundedSquareShapeInstance
         "CIRCLE" -> CircleShape
-        "TEARDROP" -> PixelTeardropShape()
-        else -> PixelSquircleShape()
+        "TEARDROP" -> teardropShapeInstance
+        else -> squircleShapeInstance
     }
 }
 
@@ -205,26 +237,37 @@ fun getStockAppColor(systemKey: String): Color {
     }
 }
 
-@Composable
-fun rememberAppDrawableBitmap(context: Context, packageName: String): ImageBitmap? {
-    return remember(packageName) {
-        try {
-            val pm = context.packageManager
-            val drawable = pm.getApplicationIcon(packageName)
-            val bitmap = drawable.toBitmap(128, 128)
-            bitmap.asImageBitmap()
-        } catch (e: Throwable) {
-            null
-        }
+object AppIconCache {
+    private val memoryCache = LruCache<String, ImageBitmap>(250)
+
+    fun get(packageName: String): ImageBitmap? = memoryCache.get(packageName)
+
+    fun put(packageName: String, bitmap: ImageBitmap) {
+        memoryCache.put(packageName, bitmap)
+    }
+
+    fun clear() {
+        memoryCache.evictAll()
     }
 }
+
+private val appIconLabelStyle = TextStyle(
+    fontSize = 12.sp,
+    fontWeight = FontWeight.Medium,
+    color = Color.White,
+    shadow = Shadow(
+        color = Color.Black.copy(alpha = 0.8f),
+        offset = Offset(0f, 2f),
+        blurRadius = 4f
+    )
+)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PixelAppIcon(
     app: AppModel,
     modifier: Modifier = Modifier,
-    useThemedIcons: Boolean = true,
+    useThemedIcons: Boolean = false,
     iconShape: String = "SQUIRCLE",
     showLabel: Boolean = true,
     iconSize: Dp = 54.dp,
@@ -235,11 +278,30 @@ fun PixelAppIcon(
     val maskShape = remember(iconShape) { getPixelMaskShape(iconShape) }
     val themeColor = MaterialTheme.colorScheme.primary
     val containerColor = MaterialTheme.colorScheme.surfaceVariant
+    val isPredefinedSystemApp = app.systemIconKey != "android"
     val iconVector = getSystemIconForApp(app.systemIconKey)
     val stockColor = getStockAppColor(app.systemIconKey)
-    val realBitmap = rememberAppDrawableBitmap(context, app.packageName)
 
-    val isPredefinedSystemApp = app.systemIconKey != "android"
+    // Ultra-fast async icon loader: never blocks UI thread, instant from memory cache
+    val realBitmap by produceState<ImageBitmap?>(
+        initialValue = remember(app.packageName) { AppIconCache.get(app.packageName) },
+        key1 = app.packageName
+    ) {
+        if (value != null || isPredefinedSystemApp) return@produceState
+        val loaded = withContext(Dispatchers.IO) {
+            try {
+                val pm = context.packageManager
+                val drawable = pm.getApplicationIcon(app.packageName)
+                val bitmap = drawable.toBitmap(96, 96, Bitmap.Config.ARGB_8888)
+                val img = bitmap.asImageBitmap()
+                AppIconCache.put(app.packageName, img)
+                img
+            } catch (e: Throwable) {
+                null
+            }
+        }
+        value = loaded
+    }
 
     Column(
         modifier = modifier
@@ -254,8 +316,14 @@ fun PixelAppIcon(
         Box(
             modifier = Modifier
                 .size(iconSize)
-                .shadow(elevation = 2.dp, shape = maskShape, clip = false)
-                .clip(maskShape)
+                .graphicsLayer {
+                    // Hardware accelerated graphics layer:
+                    // RenderNode handles shape clipping and shadow on the GPU,
+                    // accelerating heavy vector and bitmap iconography
+                    shadowElevation = 2.dp.toPx()
+                    shape = maskShape
+                    clip = true
+                }
                 .background(
                     if (useThemedIcons) {
                         containerColor
@@ -274,6 +342,7 @@ fun PixelAppIcon(
                 ),
             contentAlignment = Alignment.Center
         ) {
+            val currentBitmap = realBitmap
             if (isPredefinedSystemApp) {
                 Icon(
                     imageVector = iconVector,
@@ -281,17 +350,17 @@ fun PixelAppIcon(
                     tint = if (useThemedIcons) themeColor else Color.White,
                     modifier = Modifier.size(iconSize * 0.54f)
                 )
-            } else if (realBitmap != null) {
+            } else if (currentBitmap != null) {
                 if (useThemedIcons) {
                     Image(
-                        bitmap = realBitmap,
+                        bitmap = currentBitmap,
                         contentDescription = app.label,
                         colorFilter = ColorFilter.tint(themeColor, BlendMode.SrcIn),
                         modifier = Modifier.size(iconSize * 0.56f)
                     )
                 } else {
                     Image(
-                        bitmap = realBitmap,
+                        bitmap = currentBitmap,
                         contentDescription = app.label,
                         modifier = Modifier.size(iconSize * 0.70f)
                     )
@@ -309,16 +378,7 @@ fun PixelAppIcon(
         if (showLabel) {
             Text(
                 text = app.label,
-                style = TextStyle(
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White,
-                    shadow = Shadow(
-                        color = Color.Black.copy(alpha = 0.8f),
-                        offset = Offset(0f, 2f),
-                        blurRadius = 4f
-                    )
-                ),
+                style = appIconLabelStyle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,

@@ -1,8 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -24,15 +21,16 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.FilterChip
@@ -44,6 +42,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,12 +55,13 @@ import androidx.compose.ui.unit.sp
 import com.example.model.AppCategory
 import com.example.model.AppModel
 import com.example.ui.theme.GoogleBlue
+import com.example.ui.theme.PixelDrawerBackground
 import kotlinx.coroutines.launch
 
 /**
- * Reusable vertical swipe-up Pixel App Drawer component.
- * Displays a search bar at the top, category filters, fast A-Z scroll bar,
- * and a 4-column grid of installed applications.
+ * Classic Pixel App Drawer with Horizontal Paging.
+ * Features top search bar, category filters, page-by-page horizontal swiping
+ * with page indicators, and standard full-color icon grid.
  */
 @Composable
 fun VerticalAppDrawer(
@@ -69,7 +69,7 @@ fun VerticalAppDrawer(
     allApps: List<AppModel>,
     searchQuery: String,
     selectedCategory: AppCategory = AppCategory.ALL,
-    useThemedIcons: Boolean = true,
+    useThemedIcons: Boolean = false,
     iconShape: String = "SQUIRCLE",
     gridColumns: Int = 4,
     onSearchChange: (String) -> Unit,
@@ -79,22 +79,32 @@ fun VerticalAppDrawer(
     onCloseDrawer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
-    val alphabet = ('A'..'Z').toList()
+    val appsPerPage = gridColumns * 5 // 20 apps per page (4x5 grid)
 
-    val topSuggestedApps = allApps.sortedByDescending { it.launchCount }.take(4)
+    val topSuggestedApps = remember(allApps) {
+        allApps.sortedByDescending { it.launchCount }.take(gridColumns)
+    }
+
+    val showSuggested = searchQuery.isBlank() && selectedCategory == AppCategory.ALL && topSuggestedApps.isNotEmpty()
+
+    // Divide apps into horizontal pages
+    val pages = remember(apps, appsPerPage) {
+        if (apps.isEmpty()) listOf(emptyList())
+        else apps.chunked(appsPerPage)
+    }
+
+    val pagerState = rememberPagerState(pageCount = { pages.size })
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f))
+            .background(PixelDrawerBackground)
             .statusBarsPadding()
             .navigationBarsPadding()
             .testTag("vertical_app_drawer")
             .draggable(
                 state = rememberDraggableState { delta ->
-                    // Swipe down on the drawer to dismiss
                     if (delta > 35) {
                         onCloseDrawer()
                     }
@@ -107,7 +117,7 @@ fun VerticalAppDrawer(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
         ) {
-            // Drag handle pill at the top
+            // Drag handle pill at top
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -124,7 +134,7 @@ fun VerticalAppDrawer(
                 )
             }
 
-            // Top Search Bar
+            // Top Search Bar (Classic Pixel Input)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -211,96 +221,138 @@ fun VerticalAppDrawer(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Top Suggested Apps Section (Shown when no search query is active)
-            if (searchQuery.isBlank() && selectedCategory == AppCategory.ALL && topSuggestedApps.isNotEmpty()) {
-                Text(
-                    text = "Suggested",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 6.dp, bottom = 8.dp)
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    topSuggestedApps.forEach { app ->
-                        PixelAppIcon(
-                            app = app,
-                            useThemedIcons = useThemedIcons,
-                            iconShape = iconShape,
-                            showLabel = true,
-                            iconSize = 50.dp,
-                            onClick = { onAppClick(app) },
-                            onLongClick = { onAppLongClick(app) }
-                        )
+            // Suggested Apps Bar (Shown above pages when search is blank)
+            if (showSuggested) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Suggested",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 6.dp, bottom = 6.dp)
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        topSuggestedApps.forEach { app ->
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                PixelAppIcon(
+                                    app = app,
+                                    useThemedIcons = useThemedIcons,
+                                    iconShape = iconShape,
+                                    showLabel = true,
+                                    iconSize = 50.dp,
+                                    onClick = { onAppClick(app) },
+                                    onLongClick = { onAppLongClick(app) }
+                                )
+                            }
+                        }
+                        repeat(gridColumns - topSuggestedApps.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Grid of Installed Apps + A-Z Scrubber
-            Row(modifier = Modifier.fillMaxSize()) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(gridColumns),
-                    state = gridState,
+            // Horizontal Pager for Page-by-Page Swiping
+            if (apps.isNotEmpty()) {
+                HorizontalPager(
+                    state = pagerState,
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxHeight()
-                        .testTag("app_drawer_grid"),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(apps, key = { it.packageName }) { app ->
-                        PixelAppIcon(
-                            app = app,
-                            useThemedIcons = useThemedIcons,
-                            iconShape = iconShape,
-                            showLabel = true,
-                            iconSize = 54.dp,
-                            onClick = { onAppClick(app) },
-                            onLongClick = { onAppLongClick(app) }
-                        )
-                    }
-                    item {
-                        Spacer(modifier = Modifier.height(48.dp))
-                    }
-                }
-
-                // A-Z Quick Scrubber Bar
-                if (searchQuery.isBlank()) {
-                    Column(
-                        modifier = Modifier
-                            .width(22.dp)
-                            .fillMaxHeight()
-                            .padding(vertical = 4.dp),
-                        verticalArrangement = Arrangement.SpaceEvenly,
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        .fillMaxWidth()
+                        .testTag("app_drawer_pager")
+                ) { pageIndex ->
+                    val pageApps = pages.getOrElse(pageIndex) { emptyList() }
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(gridColumns),
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        alphabet.forEach { char ->
-                            Text(
-                                text = char.toString(),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                                modifier = Modifier
-                                    .clickable {
-                                        val index = apps.indexOfFirst { it.label.startsWith(char, ignoreCase = true) }
-                                        if (index >= 0) {
-                                            scope.launch {
-                                                gridState.scrollToItem(index)
-                                            }
-                                        }
-                                    }
-                                    .padding(vertical = 1.dp)
+                        items(
+                            items = pageApps,
+                            key = { it.packageName },
+                            contentType = { "app" }
+                        ) { app ->
+                            PixelAppIcon(
+                                app = app,
+                                useThemedIcons = useThemedIcons,
+                                iconShape = iconShape,
+                                showLabel = true,
+                                iconSize = 54.dp,
+                                onClick = { onAppClick(app) },
+                                onLongClick = { onAppLongClick(app) }
                             )
                         }
                     }
                 }
+            } else {
+                // Empty state if search or category has no items
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(44.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "No apps found",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+
+            // Page Indicator Dots
+            if (pages.size > 1 && searchQuery.isBlank()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                        .testTag("app_drawer_page_indicators"),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    repeat(pages.size) { index ->
+                        val isSelected = pagerState.currentPage == index
+                        val dotWidth = androidx.compose.animation.core.animateDpAsState(
+                            targetValue = if (isSelected) 22.dp else 8.dp,
+                            label = "dot_width"
+                        ).value
+                        val dotColor = androidx.compose.animation.animateColorAsState(
+                            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.35f),
+                            label = "dot_color"
+                        ).value
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 4.dp)
+                                .size(width = dotWidth, height = 8.dp)
+                                .clip(CircleShape)
+                                .background(dotColor)
+                                .clickable {
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(index)
+                                    }
+                                }
+                        )
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.height(12.dp))
             }
         }
     }
